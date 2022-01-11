@@ -1,2 +1,3 @@
 # PleaseResyncExamples
-Small example Ppojects using PleaseResync with different frameworks / game engines.
+
+Small example Projects using PleaseResync with different frameworks / game engines.
