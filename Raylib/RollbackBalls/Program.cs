@@ -1,5 +1,6 @@
 ﻿using Raylib_cs;
 using MessagePack;
+using PleaseResync;
 using System;
 
 namespace RollbackBalls
@@ -8,25 +9,96 @@ namespace RollbackBalls
     {
         public const int ScreenWidth = 600;
         public const int ScreenHeight = 600;
+        public const uint INPUT_SIZE = 1;
+        public const ushort FRAME_DELAY = 10;
         static void Main(string[] args)
         {
-            var gamestate = new Gamestate(2);
-            // var bytes = MessagePackSerializer.Serialize(state);
-            // state = MessagePackSerializer.Deserialize<Gamestate>(bytes);
+            Console.WriteLine("Local Device Num:");
+            ushort localDevice = Convert.ToUInt16(Console.ReadLine());
+
+            Console.WriteLine("Remote Device Num:");
+            ushort remoteDevice = Convert.ToUInt16(Console.ReadLine());
+
+            Console.WriteLine("Local Port:");
+            ushort localPort = Convert.ToUInt16(Console.ReadLine());
+
+            Console.WriteLine("Remote Port:");
+            ushort remotePort = Convert.ToUInt16(Console.ReadLine());
+
+            RunGame(localDevice, remoteDevice, localPort, remotePort);
+        }
+
+        private static void RunGame(ushort localId, ushort remoteId, ushort localPort, ushort remotePort)
+        {
             Raylib.InitWindow(ScreenWidth, ScreenHeight, "RollbackBalls");
             Raylib.SetTargetFPS(60);
 
+            var gamestate = new Gamestate(2);
+            // var bytes = MessagePackSerializer.Serialize(state);
+            // state = MessagePackSerializer.Deserialize<Gamestate>(bytes);
+            uint localDeviceId = localId;
+            uint remoteDeviceId = remoteId;
+            var adapter = new UdpSessionAdapter(localPort);
+            var session = new Peer2PeerSession(INPUT_SIZE, 2, 2, adapter);
+
+            session.SetLocalDevice(localDeviceId, 1, FRAME_DELAY);
+            session.AddRemoteDevice(remoteDeviceId, 1, UdpSessionAdapter.CreateRemoteConfig("127.0.0.1", remotePort));
+
             while (!Raylib.WindowShouldClose())
             {
-                Raylib.BeginDrawing();
-                Raylib.ClearBackground(Color.BLACK);
+                session.Poll();
 
-                Raylib.DrawText("Hello, world!", 12, 12, 20, Color.WHITE);
+                if (session.IsRunning())
+                {
+                    var actions = session.AdvanceFrame(new byte[] { GetLocalInput() });
+                    // execute each action
+                    foreach (var action in actions)
+                    {
+                        switch (action)
+                        {
+                            case SessionAdvanceFrameAction AFAction:
+                                gamestate.Update(AFAction.Inputs);
+                                break;
+                            case SessionLoadGameAction LGAction:
+                                gamestate = MessagePackSerializer.Deserialize<Gamestate>(LGAction.Load());
+                                break;
+                            case SessionSaveGameAction SGAction:
+                                SGAction.Save(MessagePackSerializer.Serialize(gamestate));
+                                break;
+                        }
+                    }
+                    //render the game
+                    RenderGame(gamestate);
+                }
+            }
+            Raylib.CloseWindow();
+        }
 
-                Raylib.EndDrawing();
+        private static byte GetLocalInput()
+        {
+            var input = new PlayerInput();
+
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_W)) input.SetInputBit(0, true);
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_S)) input.SetInputBit(1, true);
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_A)) input.SetInputBit(2, true);
+            if (Raylib.IsKeyDown(KeyboardKey.KEY_D)) input.SetInputBit(3, true);
+
+            return input.InputState;
+        }
+
+        private static void RenderGame(Gamestate gamestate)
+        {
+            Raylib.BeginDrawing();
+            Raylib.ClearBackground(Color.BLACK);
+
+            for (int i = 0; i < gamestate.Players.Length; i++)
+            {
+                var player = gamestate.Players[i];
+                Raylib.DrawCircle(player.Position.X, player.Position.Y, 50, Color.SKYBLUE);
+                Raylib.DrawText(i.ToString(), player.Position.X, player.Position.Y, 20, Color.BLACK);
             }
 
-            Raylib.CloseWindow();
+            Raylib.EndDrawing();
         }
     }
 
@@ -80,12 +152,16 @@ namespace RollbackBalls
                 if (input.IsInputBitSet(3))
                     dir.X += 1;
 
-                if (dir.X != 0 && dir.Y != 0)
-                {
-                    dir.Norm();
+                dir.Norm();
 
-                    player.Velocity.X += dir.X * 10;
-                    player.Velocity.Y += dir.Y * 10;
+                if (dir.X != 0)
+                {
+                    player.Velocity.X = dir.X * 7;
+                }
+
+                if (dir.Y != 0)
+                {
+                    player.Velocity.Y = dir.Y * 7;
                 }
             }
         }
