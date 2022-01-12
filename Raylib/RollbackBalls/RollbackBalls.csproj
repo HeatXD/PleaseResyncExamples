@@ -5,5 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Raylib-cs" Version="4.0.0-alpha.3"/>
+    <PackageReference Include="MessagePack" Version="2.3.85"/>
+    <ProjectReference Include="../../../PleaseResync/src/PleaseResync.csproj"/>
   </ItemGroup>
 </Project>
