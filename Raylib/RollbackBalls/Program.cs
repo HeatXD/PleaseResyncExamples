@@ -31,7 +31,7 @@ namespace RollbackBalls
         private static void RunGame(ushort localId, ushort remoteId, ushort localPort, ushort remotePort)
         {
             Raylib.InitWindow(ScreenWidth, ScreenHeight, "RollbackBalls");
-            Raylib.SetTargetFPS(60);
+            Raylib.SetTargetFPS(3);
 
             var gamestate = new Gamestate(2);
             // var bytes = MessagePackSerializer.Serialize(state);
@@ -71,6 +71,7 @@ namespace RollbackBalls
                     RenderGame(gamestate);
                 }
             }
+            adapter.Close();
             Raylib.CloseWindow();
         }
 
