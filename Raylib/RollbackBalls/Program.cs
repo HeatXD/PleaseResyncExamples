@@ -10,66 +10,113 @@ namespace RollbackBalls
         public const int ScreenWidth = 600;
         public const int ScreenHeight = 600;
         public const uint INPUT_SIZE = 1;
-        public const ushort FRAME_DELAY = 10;
+        public const ushort FRAME_DELAY = 1;
         static void Main(string[] args)
         {
-            Console.WriteLine("Local Device Num:");
-            ushort localDevice = Convert.ToUInt16(Console.ReadLine());
+            Console.WriteLine("0 = Offline, !0 = Online:");
+            ushort gameMode = Convert.ToUInt16(Console.ReadLine());
 
-            Console.WriteLine("Remote Device Num:");
-            ushort remoteDevice = Convert.ToUInt16(Console.ReadLine());
+            if (gameMode == 0)
+            {
+                RunOfflineGame();
+            }
+            else
+            {
+                Console.WriteLine("Local Device Num:");
+                ushort localDevice = Convert.ToUInt16(Console.ReadLine());
 
-            Console.WriteLine("Local Port:");
-            ushort localPort = Convert.ToUInt16(Console.ReadLine());
+                Console.WriteLine("Remote Device Num:");
+                ushort remoteDevice = Convert.ToUInt16(Console.ReadLine());
 
-            Console.WriteLine("Remote Port:");
-            ushort remotePort = Convert.ToUInt16(Console.ReadLine());
+                Console.WriteLine("Local Port:");
+                ushort localPort = Convert.ToUInt16(Console.ReadLine());
 
-            RunGame(localDevice, remoteDevice, localPort, remotePort);
+                Console.WriteLine("Remote Port:");
+                ushort remotePort = Convert.ToUInt16(Console.ReadLine());
+
+                RunOnlineGame(localDevice, remoteDevice, localPort, remotePort);
+            }
         }
 
-        private static void RunGame(ushort localId, ushort remoteId, ushort localPort, ushort remotePort)
+        private static void RunOfflineGame()
         {
             Raylib.InitWindow(ScreenWidth, ScreenHeight, "RollbackBalls");
-            Raylib.SetTargetFPS(30);
 
             var gamestate = new Gamestate(2);
-            // var bytes = MessagePackSerializer.Serialize(state);
-            // state = MessagePackSerializer.Deserialize<Gamestate>(bytes);
+
+            double oldTime = 0.0, accumulator = 0.0;
+
+            while (!Raylib.WindowShouldClose())
+            {
+                double deltaTime = Raylib.GetTime() - oldTime;
+                oldTime = Raylib.GetTime();
+                accumulator += deltaTime;
+
+                while (accumulator > 1.0 / 61.0)
+                {
+                    // execute each action
+                    gamestate.Update(new byte[] { GetLocalInput(), 0 });
+                    accumulator -= 1.0 / 59.0;
+                    if (accumulator < 0) accumulator = 0;
+                }
+                //render the game
+                RenderGame(gamestate);
+            }
+            Raylib.CloseWindow();
+        }
+
+        private static void RunOnlineGame(ushort localId, ushort remoteId, ushort localPort, ushort remotePort)
+        {
+            Raylib.InitWindow(ScreenWidth, ScreenHeight, "RollbackBalls");
+
+            var gamestate = new Gamestate(2);
+
             uint localDeviceId = localId;
             uint remoteDeviceId = remoteId;
+
             var adapter = new UdpSessionAdapter(localPort);
             var session = new Peer2PeerSession(INPUT_SIZE, 2, 2, adapter);
 
             session.SetLocalDevice(localDeviceId, 1, FRAME_DELAY);
             session.AddRemoteDevice(remoteDeviceId, 1, UdpSessionAdapter.CreateRemoteConfig("127.0.0.1", remotePort));
 
+            double oldTime = 0.0, accumulator = 0.0;
+
             while (!Raylib.WindowShouldClose())
             {
-                session.Poll();
+                double deltaTime = Raylib.GetTime() - oldTime;
+                oldTime = Raylib.GetTime();
+                accumulator += deltaTime;
 
-                if (session.IsRunning())
+                while (accumulator > 1.0 / 61.0)
                 {
-                    var actions = session.AdvanceFrame(new byte[] { GetLocalInput() });
-                    // execute each action
-                    foreach (var action in actions)
+                    session.Poll();
+
+                    if (session.IsRunning())
                     {
-                        switch (action)
+                        var actions = session.AdvanceFrame(new byte[] { GetLocalInput() });
+                        // execute each action
+                        foreach (var action in actions)
                         {
-                            case SessionAdvanceFrameAction AFAction:
-                                gamestate.Update(AFAction.Inputs);
-                                break;
-                            case SessionLoadGameAction LGAction:
-                                gamestate = MessagePackSerializer.Deserialize<Gamestate>(LGAction.Load());
-                                break;
-                            case SessionSaveGameAction SGAction:
-                                SGAction.Save(MessagePackSerializer.Serialize(gamestate));
-                                break;
+                            switch (action)
+                            {
+                                case SessionAdvanceFrameAction AFAction:
+                                    gamestate.Update(AFAction.Inputs);
+                                    break;
+                                case SessionLoadGameAction LGAction:
+                                    gamestate = MessagePackSerializer.Deserialize<Gamestate>(LGAction.Load());
+                                    break;
+                                case SessionSaveGameAction SGAction:
+                                    SGAction.Save(MessagePackSerializer.Serialize(gamestate));
+                                    break;
+                            }
                         }
                     }
-                    //render the game
-                    RenderGame(gamestate);
+                    accumulator -= 1.0 / 59.0;
+                    if (accumulator < 0) accumulator = 0;
                 }
+                //render the game
+                RenderGame(gamestate);
             }
             adapter.Close();
             Raylib.CloseWindow();
@@ -91,6 +138,7 @@ namespace RollbackBalls
         {
             Raylib.BeginDrawing();
             Raylib.ClearBackground(Color.BLACK);
+            Raylib.DrawText(Raylib.GetFPS().ToString(), 50, 50, 30, Color.WHITE);
 
             for (int i = 0; i < gamestate.Players.Length; i++)
             {
@@ -157,12 +205,12 @@ namespace RollbackBalls
 
                 if (dir.X != 0)
                 {
-                    player.Velocity.X = dir.X * 7;
+                    player.Velocity.X = dir.X * 10;
                 }
 
                 if (dir.Y != 0)
                 {
-                    player.Velocity.Y = dir.Y * 7;
+                    player.Velocity.Y = dir.Y * 10;
                 }
             }
         }
