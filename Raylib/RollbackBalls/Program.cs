@@ -2,6 +2,7 @@
 using MessagePack;
 using PleaseResync;
 using System;
+using System.Collections.Generic;
 
 namespace RollbackBalls
 {
@@ -92,26 +93,14 @@ namespace RollbackBalls
                 {
                     session.Poll();
 
-                    if (session.IsRunning())
-                    {
-                        var actions = session.AdvanceFrame(new byte[] { GetLocalInput() });
-                        // execute each action
-                        foreach (var action in actions)
-                        {
-                            switch (action)
-                            {
-                                case SessionAdvanceFrameAction AFAction:
-                                    gamestate.Update(AFAction.Inputs);
-                                    break;
-                                case SessionLoadGameAction LGAction:
-                                    gamestate = MessagePackSerializer.Deserialize<Gamestate>(LGAction.Load());
-                                    break;
-                                case SessionSaveGameAction SGAction:
-                                    SGAction.Save(MessagePackSerializer.Serialize(gamestate));
-                                    break;
-                            }
-                        }
-                    }
+                    HandleEvents(session.Events());
+
+                    // if (session.IsRunning())
+                    // {
+                    //     var actions = session.AdvanceFrame(new byte[] { GetLocalInput() });
+                    //     // execute each action
+                    //     UpdateGame(gamestate, actions);
+                    // }
                     accumulator -= 1.0 / 59.0;
                     if (accumulator < 0) accumulator = 0;
                 }
@@ -120,6 +109,33 @@ namespace RollbackBalls
             }
             adapter.Close();
             Raylib.CloseWindow();
+        }
+
+        private static void HandleEvents(Queue<SessionEvent> ev)
+        {
+            while (ev.Count > 0)
+            {
+                Console.WriteLine("EVENT: " + ev.Dequeue().Desc());
+            }
+        }
+
+        private static void UpdateGame(Gamestate gamestate, List<SessionAction> actions)
+        {
+            foreach (var action in actions)
+            {
+                switch (action)
+                {
+                    case SessionAdvanceFrameAction AFAction:
+                        gamestate.Update(AFAction.Inputs);
+                        break;
+                    case SessionLoadGameAction LGAction:
+                        gamestate = MessagePackSerializer.Deserialize<Gamestate>(LGAction.Load());
+                        break;
+                    case SessionSaveGameAction SGAction:
+                        SGAction.Save(MessagePackSerializer.Serialize(gamestate));
+                        break;
+                }
+            }
         }
 
         private static byte GetLocalInput()
@@ -205,12 +221,12 @@ namespace RollbackBalls
 
                 if (dir.X != 0)
                 {
-                    player.Velocity.X = dir.X * 10;
+                    player.Velocity.X = dir.X * 2;
                 }
 
                 if (dir.Y != 0)
                 {
-                    player.Velocity.Y = dir.Y * 10;
+                    player.Velocity.Y = dir.Y * 2;
                 }
             }
         }
